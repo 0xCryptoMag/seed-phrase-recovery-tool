@@ -7,7 +7,7 @@ Once installed on your computer download this repository by using `git clone htt
 
 In your terminal use `cd path/to/folder` where path to folder is the path to the folder. Alternatively you can open up the file on file explorer then select Open in Terminal. Once the terminal is in the directory of the project folder use the command `npm install` to install all dependencies.
 
-The dependencies this project uses are ethersjs (v6), bip39, and dotenv. A list of all dependencies that will get installed from `npm install` will be listed in the `package.json` file. All these dependencies are standard and widely used, but feel free to go to [npmjs.com] (the site node package manager (npm) pull it's packages from) to look at them yourselves.
+The dependencies this project uses are ethersjs (v6), bip39, and dotenv. A list of all dependencies that will get installed from `npm install` will be listed in the `package.json` file. All these dependencies are standard and widely used, but feel free to go to [https://npmjs.com] (the site node package manager (npm) pull it's packages from) to look at them yourselves.
 
 The tool is run by putting `node index.js`. This will run the code that is in that Javascript file.
 
