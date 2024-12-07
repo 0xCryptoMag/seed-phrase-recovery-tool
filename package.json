@@ -1,0 +1,21 @@
+{
+  "name": "recovery-tool",
+  "version": "1.0.0",
+  "description": "Used to recover a seed phrase with one missing word",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "recovery",
+    "seed",
+    "phrase"
+  ],
+  "author": "0xCryptoMag",
+  "license": "ISC",
+  "dependencies": {
+    "bip39": "^3.1.0",
+    "dotenv": "^16.4.7",
+    "ethers": "^6.13.4"
+  }
+}
