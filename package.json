@@ -1,20 +1,32 @@
 {
-  "name": "recovery-tool",
-  "version": "1.0.0",
-  "description": "Used to recover a seed phrase with one missing word",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [
-    "recovery",
-    "seed",
-    "phrase"
-  ],
-  "author": "0xCryptoMag",
-  "license": "ISC",
-  "dependencies": {
-    "dotenv": "^16.4.7",
-    "ethers": "^6.13.4"
-  }
+	"name": "recovery-tool",
+	"version": "1.0.0",
+	"description": "Used to recover a seed phrase with one missing word",
+	"main": "dist/index.js",
+	"scripts": {
+		"build": "tsc",
+		"start": "node dist/recover.js",
+		"dev": "tsc && node dist/index.js",
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"keywords": [
+		"recovery",
+		"seed",
+		"phrase"
+	],
+	"author": "0xCryptoMag",
+	"license": "ISC",
+	"dependencies": {
+		"@scure/bip32": "^1.7.0",
+		"@scure/bip39": "^1.6.0",
+		"bip39": "^3.1.0",
+		"bitcoinjs-lib": "^6.1.7",
+		"dotenv": "^16.4.7",
+		"viem": "^2.33.2"
+	},
+	"devDependencies": {
+		"@types/bip39": "^2.4.2",
+		"@types/node": "^24.2.0",
+		"typescript": "^5.9.2"
+	}
 }
