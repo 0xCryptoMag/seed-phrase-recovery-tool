@@ -1,11 +1,17 @@
 import type { Address } from 'viem';
-import type { PartialMnemonic, PartialWithCandidates } from './types';
+import type {
+	Chain,
+	PossibleAddress,
+	PartialMnemonic,
+	PartialWithCandidates
+} from './types';
 
 import { wordlists } from 'bip39';
 import {
-	createPartialMnemonicWithMissingWords,
-	createFullMnemonicFromCandidates,
-	generateWalletAddresses
+	getPartialMnemonicWithMissingWords,
+	getFullMnemonicFromCandidates,
+	getEthWalletAddresses,
+	getBtcWalletAddress
 } from './helpers';
 
 /**
@@ -54,59 +60,72 @@ export function createPartialWithCandidates(
 }
 
 /**
- * Takes a partial mnemonic and obtains an array of string arrays where the
- * elements of the outer array are a permutation of just the candidates for the
- * missing words (not the whole seed phrase)
+ * A generator function that creates a limited number of combinations of the
+ * candidates at a time to prevent memory overflow
  * @param partialWithCandidates - The partial mnemonic with candidates
- * @param repeatingWords - Whether to allow repeating words
+ * @param repeatingWords - Whether to allow repeating words in the combinations
+ * @param chunkSize - The number of combinations to create at a time
  */
-export function generateCombinationsOfCandidates(
+export function* createCombinationsGenerator(
 	partialWithCandidates: PartialWithCandidates,
-	repeatingWords: boolean = false
-): string[][] {
-	const wordList = wordlists.english;
-
+	repeatingWords: boolean = false,
+	chunkSize: number = 1000
+): Generator<string[][], void, unknown> {
+	const missingPositions: number[] = [];
 	const candidateLists: (string[] | undefined)[] = [];
 
 	partialWithCandidates.forEach((word, index) => {
 		if (typeof word === 'string') {
 			return;
 		} else if (Array.isArray(word)) {
+			missingPositions.push(index);
 			candidateLists.push(word);
 		} else {
+			missingPositions.push(index);
 			candidateLists.push(undefined);
 		}
 	});
 
-	const combinationsOfCandidates: string[][] = [];
+	const wordList = wordlists.english;
+	let combinations: string[][] = [];
 
-	(function generatePermutations(current: string[], depth: number) {
-		if (depth === candidateLists.length) {
-			combinationsOfCandidates.push([...current]);
+	function* permutationsGenerator(
+		current: string[],
+		depth: number
+	): Generator<string[][], void, unknown> {
+		if (depth === missingPositions.length) {
+			combinations.push([...current]);
+
+			if (combinations.length >= chunkSize) {
+				yield combinations;
+				combinations = [];
+			}
 			return;
 		}
 
 		const candidates = candidateLists[depth] || wordList;
 
-		for (const candidate of candidates) {
+		for (const word of candidates) {
 			if (!repeatingWords) {
-				const testMnemonic = createPartialMnemonicWithMissingWords(
+				const testMnemonic = getPartialMnemonicWithMissingWords(
 					partialWithCandidates,
 					current,
 					depth
 				);
-				if (testMnemonic.includes(candidate)) continue;
+				if (testMnemonic.includes(word)) {
+					continue;
+				}
 			}
-			current[depth] = candidate;
-			generatePermutations(current, depth + 1);
+			current[depth] = word;
+			yield* permutationsGenerator(current, depth + 1);
 		}
-	})(new Array(candidateLists.length), 0);
+	}
 
-	console.log(
-		`Generated ${combinationsOfCandidates.length} combinations of candidates`
-	);
+	yield* permutationsGenerator(new Array(missingPositions.length), 0);
 
-	return combinationsOfCandidates;
+	if (combinations.length > 0) {
+		yield combinations;
+	}
 }
 
 /**
@@ -117,35 +136,39 @@ export function generateCombinationsOfCandidates(
  * @param partialWithCandidates - The partial mnemonic with candidates
  * @param combinationsOfCandidates - All the combinations of candidates
  */
-export function generatePossibleAddressesAndCombinations(
+export function createPossibleAddressesAndCombinations<C extends Chain>(
 	partialWithCandidates: PartialWithCandidates,
-	combinationsOfCandidates: string[][]
+	combinationsOfCandidates: string[][],
+	chain: C
 ): {
-	possibleAddresses: { ethereum: Address; bitcoin: string }[];
-	possibleCombinations: string[][];
+	addressChunks: PossibleAddress<C>[];
+	combinationChunks: string[][];
 } {
-	const possibleAddresses: { ethereum: Address; bitcoin: string }[] = [];
-	const possibleCombinations: string[][] = [];
+	const addressChunks: PossibleAddress<C>[] = [];
+	const combinationChunks: string[][] = [];
 
 	for (const combination of combinationsOfCandidates) {
 		try {
-			const fullMnemonic = createFullMnemonicFromCandidates(
+			const fullMnemonic = getFullMnemonicFromCandidates(
 				partialWithCandidates,
 				combination
 			);
-			const address = generateWalletAddresses(fullMnemonic);
+			const address =
+				chain !== 'bitcoin'
+					? getEthWalletAddresses(fullMnemonic)
+					: getBtcWalletAddress(fullMnemonic);
 
-			possibleAddresses.push(address);
-			possibleCombinations.push(combination);
+			addressChunks.push(address as PossibleAddress<C>);
+			combinationChunks.push(combination);
 		} catch {
 			continue;
 		}
 	}
 
-	console.log(`Found ${possibleAddresses.length} possible valid addresses`);
+	console.log(`Found ${addressChunks.length} possible valid addresses`);
 
 	return {
-		possibleAddresses,
-		possibleCombinations
+		addressChunks,
+		combinationChunks
 	};
 }

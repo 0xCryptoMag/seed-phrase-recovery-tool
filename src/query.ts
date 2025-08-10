@@ -1,5 +1,5 @@
 import type { Address, PublicClient, Transport } from 'viem';
-import type { QueryResult } from './types';
+import type { Chain, PossibleAddress, QueryResult } from './types';
 
 import { createPublicClient, http } from 'viem';
 import * as chains from 'viem/chains';
@@ -10,13 +10,15 @@ import * as chains from 'viem/chains';
  * @param possibleCombinations - The possible combinations
  * @param chain - The chain to query
  */
-export async function queryAddressBalances(
-	possibleAddresses: { ethereum: Address; bitcoin: string }[],
+export async function queryAddressBalances<C extends Chain>(
+	possibleAddresses: PossibleAddress<C>[],
 	possibleCombinations: string[][],
-	chain: keyof typeof chains | 'bitcoin'
-): Promise<QueryResult> {
+	chain: C,
+	count: bigint,
+	upperBound: bigint
+): Promise<QueryResult<C>> {
 	const balances: bigint[] = [];
-	const loadedWalletAddresses: { ethereum: Address; bitcoin: string }[] = [];
+	const loadedWalletAddresses: PossibleAddress<C>[] = [];
 	const loadedWalletCombinations: string[][] = [];
 
 	for (let i = 0; i < possibleAddresses.length; i++) {
@@ -25,11 +27,14 @@ export async function queryAddressBalances(
 
 		if (chain !== 'bitcoin') {
 			const client = createPublicClient({
-				chain: chains[chain],
+				chain: chains[chain as keyof typeof chains],
 				transport: http()
 			});
 
-			const balance = await checkEthBalance(address.ethereum, client);
+			const balance = await queryEthBalance(
+				(address as { eth: Address }).eth,
+				client
+			);
 
 			if (balance > 0n) {
 				balances.push(balance);
@@ -37,7 +42,7 @@ export async function queryAddressBalances(
 				loadedWalletCombinations.push(combination);
 			}
 		} else {
-			const balance = await checkBtcBalance(address.bitcoin);
+			const balance = await queryBtcBalance((address as { btc: string }).btc);
 
 			if (balance > 0n) {
 				balances.push(balance);
@@ -46,7 +51,7 @@ export async function queryAddressBalances(
 			}
 		}
 
-		console.log(`Queryied ${i + 1} of ${possibleAddresses.length} addresses`);
+		console.log(`Queryied ${count++ + 1n} of ${upperBound} addresses`);
 	}
 
 	return {
@@ -61,7 +66,7 @@ export async function queryAddressBalances(
  * @param address - The address to check
  * @param client - The client to use
  */
-export async function checkEthBalance(
+export async function queryEthBalance(
 	address: Address,
 	client: PublicClient<Transport, (typeof chains)[keyof typeof chains]>
 ): Promise<bigint> {
@@ -78,7 +83,7 @@ export async function checkEthBalance(
  * Check the balance of a Bitcoin address
  * @param address - The address to check
  */
-export async function checkBtcBalance(address: string): Promise<bigint> {
+export async function queryBtcBalance(address: string): Promise<bigint> {
 	const res = await fetch(`https://blockstream.info/api/address/${address}`);
 	if (!res.ok) return 0n;
 

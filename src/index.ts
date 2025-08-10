@@ -1,16 +1,17 @@
 export {
 	createPartialWithCandidates,
-	generateCombinationsOfCandidates,
-	generatePossibleAddressesAndCombinations
+	createCombinationsGenerator,
+	createPossibleAddressesAndCombinations
 } from './create';
 export {
-	createPartialMnemonicWithMissingWords,
-	createFullMnemonicFromCandidates,
-	generateWalletAddresses
+	getPartialMnemonicWithMissingWords,
+	getFullMnemonicFromCandidates,
+	getEthWalletAddresses,
+	getBtcWalletAddress
 } from './helpers';
 export {
 	queryAddressBalances,
-	checkEthBalance,
-	checkBtcBalance
+	queryEthBalance,
+	queryBtcBalance
 } from './query';
 export { recover } from './recover';

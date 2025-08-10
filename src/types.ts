@@ -3,27 +3,25 @@ import * as chains from 'viem/chains';
 
 export type PartialMnemonic = (string | undefined)[];
 export type PartialWithCandidates = (string | string[] | undefined)[];
+export type Chain = keyof typeof chains | 'bitcoin';
+export type PossibleAddress<C extends Chain> = C extends 'bitcoin'
+	? { btc: string }
+	: { eth: Address };
 
 // prettier-ignore
-export type RecoverArgs = {
+export type RecoverArgs<C extends Chain> = {
 	partialMnemonic: PartialMnemonic;
 	repeatingWords?: boolean;
-	publicKey?: Address;
+	chain: C;
 } & ({
+	publicKey: C extends 'bitcoin' ? string : Address;
 	queryBalances?: false;
-	chain?: keyof typeof chains | 'bitcoin';
 } | {
+	publicKey?: C extends 'bitcoin' ? string : Address;
 	queryBalances: true;
-	chain: keyof typeof chains | 'bitcoin';
-})
-
-export type QueryResult = {
+});
+export type QueryResult<C extends Chain> = {
 	balances: bigint[];
-	loadedWalletAddresses: { ethereum: Address; bitcoin: string }[];
+	loadedWalletAddresses: PossibleAddress<C>[];
 	loadedWalletCombinations: string[][];
-};
-export type RecoveryResult = {
-	possibleAddresses: { ethereum: Address; bitcoin: string }[];
-	possibleCombinations: string[][];
-	queryResult?: QueryResult;
 };
