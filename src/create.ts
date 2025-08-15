@@ -1,18 +1,22 @@
 import type { Address } from 'viem';
-import type {
-	Chain,
-	PossibleAddress,
-	PartialMnemonic,
-	PartialWithCandidates
-} from './types';
 
 import { wordlists } from 'bip39';
+import * as chains from 'viem/chains';
 import {
 	getPartialMnemonicWithMissingWords,
 	getFullMnemonicFromCandidates,
+	getMissingPositionsAndCandidates,
 	getEthWalletAddresses,
-	getBtcWalletAddress
+	getBtcWalletAddress,
+	getUpperBound
 } from './helpers';
+
+export type PartialMnemonic = (string | undefined)[];
+export type PartialWithCandidates = (string | string[] | undefined)[];
+export type Chain = keyof typeof chains | 'bitcoin';
+export type PossibleAddress<C extends Chain> = C extends 'bitcoin'
+	? { btc: string }
+	: { eth: Address };
 
 /**
  * Create a sparse array where missing words are undefined and partial words are
@@ -61,44 +65,34 @@ export function createPartialWithCandidates(
 
 /**
  * A generator function that creates a limited number of combinations of the
- * candidates at a time to prevent memory overflow
+ * candidates at a time to prevent memory overflow. Uses yield to dynamically
+ * control chunk size and skip count for optimal performance.
  * @param partialWithCandidates - The partial mnemonic with candidates
  * @param repeatingWords - Whether to allow repeating words in the combinations
- * @param chunkSize - The number of combinations to create at a time
  */
 export function* createCombinationsGenerator(
 	partialWithCandidates: PartialWithCandidates,
-	repeatingWords: boolean = false,
-	chunkSize: number = 1000
-): Generator<string[][], void, unknown> {
-	const missingPositions: number[] = [];
-	const candidateLists: (string[] | undefined)[] = [];
-
-	partialWithCandidates.forEach((word, index) => {
-		if (typeof word === 'string') {
-			return;
-		} else if (Array.isArray(word)) {
-			missingPositions.push(index);
-			candidateLists.push(word);
-		} else {
-			missingPositions.push(index);
-			candidateLists.push(undefined);
-		}
-	});
-
+	repeatingWords: boolean = false
+): Generator<string[][], void, bigint> {
+	const { missingPositions, candidateLists } = getMissingPositionsAndCandidates(
+		partialWithCandidates
+	);
 	const wordList = wordlists.english;
+
 	let combinations: string[][] = [];
+	let chunkSize: bigint;
 
 	function* permutationsGenerator(
 		current: string[],
 		depth: number
-	): Generator<string[][], void, unknown> {
+	): Generator<string[][], void, bigint> {
 		if (depth === missingPositions.length) {
 			combinations.push([...current]);
 
 			if (combinations.length >= chunkSize) {
-				yield combinations;
+				const nextChunkSize = yield combinations;
 				combinations = [];
+				chunkSize = nextChunkSize;
 			}
 			return;
 		}
@@ -121,11 +115,56 @@ export function* createCombinationsGenerator(
 		}
 	}
 
-	yield* permutationsGenerator(new Array(missingPositions.length), 0);
+	// We yield [[]] to get the skip count in the first next call. This allows
+	// us to skip without parameterizing it then wastefully checking if the
+	// skip count was passed after *every* iteration even after threshold passed
+	const skipCount = yield [[]];
+	chunkSize = skipCount;
 
+	yield* permutationsGenerator(new Array(missingPositions.length), 0);
 	if (combinations.length > 0) {
 		yield combinations;
 	}
+}
+
+/**
+ * Calculate the exact combination at a specific index without generating all
+ * previous ones. This is useful for resuming from a specific point
+ * @param partialWithCandidates - The partial mnemonic with candidates
+ * @param repeatingWords - Whether to allow repeating words in the combinations
+ * @param targetIndex - The index of the combination to get
+ */
+export function getCombinationAtIndex(
+	partialWithCandidates: PartialWithCandidates,
+	repeatingWords: boolean = false,
+	targetIndex: bigint
+): string[] | null {
+	const { missingPositions, candidateLists } = getMissingPositionsAndCandidates(
+		partialWithCandidates
+	);
+
+	if (missingPositions.length === 0) return null;
+
+	// Calculate total combinations for validation
+	let totalCombinations = getUpperBound(partialWithCandidates, repeatingWords);
+
+	if (targetIndex >= totalCombinations) return null;
+
+	const result = new Array(missingPositions.length);
+	let remainingIndex = targetIndex;
+
+	// Calculate each position's value
+	for (let i = 0; i < missingPositions.length; i++) {
+		const candidates = candidateLists[i] || wordlists.english;
+		const combinationsAfterThis = totalCombinations / BigInt(candidates.length);
+		const candidateIndex = Number(remainingIndex / combinationsAfterThis);
+
+		result[i] = candidates[candidateIndex];
+		remainingIndex = remainingIndex % combinationsAfterThis;
+		totalCombinations = combinationsAfterThis;
+	}
+
+	return result;
 }
 
 /**

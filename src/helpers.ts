@@ -1,11 +1,10 @@
 import type { Address } from 'viem';
-import type { PartialWithCandidates } from './types';
+import type { PartialWithCandidates } from './create';
 
 import { mnemonicToAccount } from 'viem/accounts';
 import { HDKey } from '@scure/bip32';
 import { mnemonicToSeedSync } from '@scure/bip39';
 import { payments, networks } from 'bitcoinjs-lib';
-import { wordlists } from 'bip39';
 
 /**
  * Helper function to create mnemonic with partial missing words (for validation)
@@ -43,7 +42,7 @@ export function getUpperBound(
 		(w) => w === undefined
 	).length;
 	const partials = partialWithCandidates.filter((w) => Array.isArray(w));
-	// Don't include partial length in subtraction, because the're candidates
+	// Don't include partial length in subtraction, because their candidates
 	// are nowhere near 2048
 	const loweredAllWords = 2048 - (partialWithCandidates.length - numberMissing);
 
@@ -68,6 +67,31 @@ export function getUpperBound(
 				.reduce((acc, _, i) => acc * BigInt(loweredAllWords - i), 1n)
 		);
 	}
+}
+
+/**
+ * Get the missing positions and candidate lists from a partial with candidates
+ * @param partialWithCandidates - The partial mnemonic with candidates
+ */
+export function getMissingPositionsAndCandidates(
+	partialWithCandidates: PartialWithCandidates
+): { missingPositions: number[]; candidateLists: (string[] | undefined)[] } {
+	const missingPositions: number[] = [];
+	const candidateLists: (string[] | undefined)[] = [];
+
+	partialWithCandidates.forEach((word, index) => {
+		if (typeof word === 'string') {
+			return;
+		} else if (Array.isArray(word)) {
+			missingPositions.push(index);
+			candidateLists.push(word);
+		} else {
+			missingPositions.push(index);
+			candidateLists.push(undefined);
+		}
+	});
+
+	return { missingPositions, candidateLists };
 }
 
 /**

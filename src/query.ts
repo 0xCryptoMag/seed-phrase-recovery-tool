@@ -1,8 +1,14 @@
 import type { Address, PublicClient, Transport } from 'viem';
-import type { Chain, PossibleAddress, QueryResult } from './types';
+import type { Chain, PossibleAddress } from './types';
 
 import { createPublicClient, http } from 'viem';
 import * as chains from 'viem/chains';
+
+export type QueryResult<C extends Chain> = {
+	balances: bigint[];
+	loadedWalletAddresses: PossibleAddress<C>[];
+	loadedWalletCombinations: string[][];
+};
 
 /**
  * Query the balances of the possible addresses for the given chain

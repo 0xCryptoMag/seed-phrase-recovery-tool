@@ -1,14 +1,15 @@
 export {
-	createPartialWithCandidates,
-	createCombinationsGenerator,
-	createPossibleAddressesAndCombinations
-} from './create';
-export {
 	getPartialMnemonicWithMissingWords,
+	getUpperBound,
 	getFullMnemonicFromCandidates,
 	getEthWalletAddresses,
 	getBtcWalletAddress
 } from './helpers';
+export {
+	createPartialWithCandidates,
+	createCombinationsGenerator,
+	createPossibleAddressesAndCombinations
+} from './create';
 export {
 	queryAddressBalances,
 	queryEthBalance,

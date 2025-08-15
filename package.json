@@ -7,8 +7,10 @@
 		"build": "tsc",
 		"start": "node --max-old-space-size=8192 dist/recover.js",
 		"start:low": "node --max-old-space-size=4096 dist/recover.js",
-		"start:high": "node --max-old-space-size=16384 dist/recover.js",
+		"start:high": "node --max-old-space-size=16384 dist/index.js",
 		"dev": "tsc && node --max-old-space-size=8192 dist/index.js",
+		"cli": "tsc && node dist/cli.js",
+		"parallel": "tsc && node dist/cli.js",
 		"test": "echo \"Error: no test specified\" && exit 1"
 	},
 	"keywords": [

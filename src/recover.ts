@@ -1,4 +1,5 @@
-import type { Chain, RecoverArgs, PartialMnemonic } from './types';
+import type { Address } from 'viem';
+import type { Chain } from './types';
 
 import { isAddress } from 'viem';
 import * as chains from 'viem/chains';
@@ -11,6 +12,21 @@ import {
 } from './create';
 import { queryAddressBalances } from './query';
 import { getUpperBound } from './helpers';
+import { WorkerManager } from './manager';
+import { ProgressTracker } from './progress';
+
+// prettier-ignore
+export type RecoverArgs<C extends Chain> = {
+	partialMnemonic: PartialMnemonic;
+	repeatingWords?: boolean;
+	chain: C;
+} & ({
+	publicKey: C extends 'bitcoin' ? string : Address;
+	queryBalances?: false;
+} | {
+	publicKey?: C extends 'bitcoin' ? string : Address;
+	queryBalances: true;
+});
 
 /**
  * Recover the possible addresses and combinations of candidates for a partial
@@ -27,77 +43,64 @@ import { getUpperBound } from './helpers';
 export async function recover<C extends Chain>(args: RecoverArgs<C>) {
 	const { partialMnemonic, repeatingWords, publicKey, chain } = args;
 
-	console.log('Beginning recovery...');
-
+	console.log('Generating candidates...');
 	const partialWithCandidates = createPartialWithCandidates(partialMnemonic);
+
 	console.log(
 		`Generating combinations of candidates with repeating words set to ${String(
 			repeatingWords
 		).toUpperCase()}`
 	);
 
+	// Check if we should resume from a previous run
+	const progressTracker = new ProgressTracker();
+	const progress = progressTracker.getProgress();
+	const resumeFromIndex =
+		progress.status === 'paused' || progress.status === 'error'
+			? progress.lastProcessedIndex
+			: undefined;
+
+	if (resumeFromIndex && resumeFromIndex > 0n) {
+		console.log(`🔄 Resuming from index ${resumeFromIndex.toString()}`);
+	}
+
+	// Calculate total combinations
 	const upperBound = getUpperBound(
 		partialWithCandidates,
 		repeatingWords ?? true
 	);
 	console.log(`Total possible combinations calculated: ${upperBound}`);
 
-	let count = 0n;
-	for (const combinationsChunk of createCombinationsGenerator(
+	// Use parallel processing for better performance
+	const numWorkers = Math.min(
+		4,
+		Math.max(1, Math.floor(Number(upperBound) / 10000))
+	); // Adjust based on total combinations
+	const chunkSize = 1000;
+
+	console.log(
+		`🚀 Starting parallel processing with ${numWorkers} workers, chunk size: ${chunkSize}`
+	);
+
+	const parallelManager = new WorkerManager({
+		numWorkers,
+		chunkSize,
 		partialWithCandidates,
-		repeatingWords,
-		1000
-	)) {
-		console.log(
-			`Processing chunk of ${combinationsChunk.length} combinations...`
-		);
+		repeatingWords: repeatingWords ?? true,
+		chain,
+		publicKey,
+		queryBalances: 'queryBalances' in args && args.queryBalances ? true : false,
+		totalCombinations: upperBound,
+		resumeFromIndex
+	});
 
-		const { addressChunks, combinationChunks } =
-			createPossibleAddressesAndCombinations(
-				partialWithCandidates,
-				combinationsChunk,
-				chain
-			);
-
-		if (publicKey) {
-			const matchingIndex = addressChunks.findIndex((address) => {
-				if ('btc' in address) {
-					return address.btc === publicKey;
-				} else {
-					return address.eth === publicKey;
-				}
-			});
-
-			if (matchingIndex !== -1) {
-				return {
-					possibleAddresses: [addressChunks[matchingIndex]],
-					possibleCombinations: [combinationChunks[matchingIndex]]
-				};
-			}
-		}
-
-		if ('queryBalances' in args && args.queryBalances) {
-			const queryResult = await queryAddressBalances(
-				addressChunks,
-				combinationChunks,
-				chain,
-				count,
-				upperBound
-			);
-
-			if (queryResult.loadedWalletAddresses.length > 0) {
-				return {
-					possibleAddresses: queryResult.loadedWalletAddresses,
-					possibleCombinations: queryResult.loadedWalletCombinations,
-					queryResult
-				};
-			}
-		}
-
-		count += 1000n;
+	try {
+		const result = await parallelManager.start();
+		return result;
+	} catch (error) {
+		console.error('❌ Parallel processing failed:', error);
+		throw error;
 	}
-
-	console.error('No matches were found 🥺🥺');
 }
 
 if (require.main === module) {
